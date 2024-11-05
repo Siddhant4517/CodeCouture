@@ -24,13 +24,56 @@ const Checkout = () => {
   const [disabled, setDisabled] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Validate if all fields are filled correctly
+  // Function to fetch city and state based on pincode
+  const fetchCityState = async (pincode) => {
+    try {
+      const response = await fetch(`/api/pincode?pincode=${pincode}`);
+      const data = await response.json();
+
+      if (data.available) {
+        setFormData((prevData) => ({
+          ...prevData,
+          city: data.location,
+          state: data.state,
+        }));
+      } else {
+        setFormData((prevData) => ({
+          ...prevData,
+          city: "",
+          state: "",
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching city and state:", error);
+      setFormData((prevData) => ({
+        ...prevData,
+        city: "",
+        state: "",
+      }));
+    }
+  };
+
+  // Effect to validate all fields and enable/disable the Pay button
   useEffect(() => {
     const allFieldsFilled = Object.values(formData).every(
       (value) => value.trim() !== ""
     );
     setDisabled(!allFieldsFilled);
   }, [formData]);
+
+  // Effect to fetch city and state when pincode is a valid 6-digit number
+  useEffect(() => {
+    const isValidPincode = /^[0-9]{6}$/.test(formData.pincode);
+    if (isValidPincode) {
+      fetchCityState(formData.pincode);
+    } else {
+      setFormData((prevData) => ({
+        ...prevData,
+        city: "",
+        state: "",
+      }));
+    }
+  }, [formData.pincode]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -39,11 +82,8 @@ const Checkout = () => {
   const handlePayment = async () => {
     try {
       const stripe = await stripePromise;
-
-      // Generate a unique order ID (for example, timestamp-based)
       const orderId = `order_${new Date().getTime()}`;
 
-      // Prepare the data to send to the server
       const { data } = await axios.post("/api/stripe", {
         cart: Object.values(cart),
         subTotal,
@@ -67,8 +107,22 @@ const Checkout = () => {
         console.error("Stripe session ID missing in response");
       }
     } catch (error) {
-      setErrorMessage("Payment initiation failed. Please try again.");
-      console.error("Payment initiation failed:", error);
+      if (
+        error.response &&
+        error.response.data.error === "Cart data has been tampered with."
+      ) {
+        // Clear cart if tampering is detected
+        localStorage.removeItem("cart");
+        localStorage.removeItem("subTotal");
+        localStorage.removeItem("cartHash");
+        alert(
+          "Your cart data seems to be tampered with. Please try adding items again."
+        );
+        router.push("/"); // Redirect user back to homepage
+      } else {
+        setErrorMessage("Payment initiation failed. Please try again.");
+        console.error("Payment initiation failed:", error);
+      }
     }
   };
 
@@ -78,7 +132,7 @@ const Checkout = () => {
 
       <h2 className="font-semibold text-xl">1. Delivery Details</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
-        {["name", "email", "phone", "address", "city", "state", "pincode"].map(
+        {["name", "email", "phone", "address", "pincode", "city", "state"].map(
           (field) => (
             <div key={field}>
               <label

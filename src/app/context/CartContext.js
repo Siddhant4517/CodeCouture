@@ -1,6 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useState, useEffect } from "react";
+import CryptoJS from "crypto-js"; // Import hashing library
 
 const CartContext = createContext();
 
@@ -13,19 +14,56 @@ export const CartProvider = ({ children }) => {
   const [key, setKey] = useState(0); // Used to force re-renders
   const router = useRouter();
 
-  // Initialize cart and user data on mount
+  // Hash generation for cart validation
+  const generateCartHash = (cart, subtotal) => {
+    const cartString = JSON.stringify(cart) + subtotal;
+    return CryptoJS.SHA256(cartString).toString();
+  };
+
+  // Save cart and generate hash
+  const saveCart = (myCart) => {
+    const subtotal = Object.keys(myCart).reduce(
+      (acc, key) => acc + myCart[key].price * myCart[key].qty,
+      0
+    );
+
+    // Store cart and subtotal
+    localStorage.setItem("cart", JSON.stringify(myCart));
+    localStorage.setItem("subTotal", subtotal);
+
+    // Generate and store hash
+    const cartHash = generateCartHash(myCart, subtotal);
+    localStorage.setItem("cartHash", cartHash);
+
+    setSubTotal(subtotal);
+  };
+
+  // Initialize cart and validate hash on mount
   useEffect(() => {
     const initializeCart = () => {
       try {
         const storedCart = localStorage.getItem("cart");
-        if (storedCart && storedCart !== "undefined") {
+        const storedSubTotal = parseFloat(localStorage.getItem("subTotal"));
+        const storedHash = localStorage.getItem("cartHash");
+
+        if (storedCart && storedHash && storedCart !== "undefined") {
           const parsedCart = JSON.parse(storedCart);
-          setCart(parsedCart);
-          saveCart(parsedCart); // Re-calculate subtotal
+          const calculatedHash = generateCartHash(parsedCart, storedSubTotal);
+
+          if (storedHash === calculatedHash) {
+            // Hash matches, load cart
+            setCart(parsedCart);
+            setSubTotal(storedSubTotal);
+          } else {
+            console.warn("Cart data may have been tampered with.");
+            localStorage.removeItem("cart");
+            localStorage.removeItem("subTotal");
+            localStorage.removeItem("cartHash");
+          }
         }
       } catch (error) {
         console.error("Error loading cart:", error);
-        localStorage.removeItem("cart"); // Handle corrupted data
+        localStorage.removeItem("cart");
       }
     };
 
@@ -37,17 +75,6 @@ export const CartProvider = ({ children }) => {
 
     initializeCart();
   }, []);
-
-  const saveCart = (myCart) => {
-    localStorage.setItem("cart", JSON.stringify(myCart));
-
-    // Calculate subtotal
-    const subtotal = Object.keys(myCart).reduce(
-      (acc, key) => acc + myCart[key].price * myCart[key].qty,
-      0
-    );
-    setSubTotal(subtotal);
-  };
 
   const addToCart = (itemCode, qty, price, name, size, variant) => {
     const newCart = { ...cart };
@@ -87,16 +114,16 @@ export const CartProvider = ({ children }) => {
   };
 
   const login = (token) => {
-    localStorage.setItem("token", token); // Store token locally
+    localStorage.setItem("token", token);
     setUser({ value: token });
-    setKey((prev) => prev + 1); // Force a re-render
+    setKey((prev) => prev + 1);
   };
 
   const logout = () => {
     localStorage.removeItem("token");
     setUser({ value: null });
-    setKey((prev) => prev + 1); // Force a re-render
-    router.push("/login"); // Redirect to login page
+    setKey((prev) => prev + 1);
+    router.push("/login");
   };
 
   return (

@@ -7,6 +7,7 @@ import { ToastContainer, toast } from "react-toastify";
 const PincodeCheck = () => {
   const [pincode, setPincode] = useState("");
   const [message, setMessage] = useState("");
+  const [locationInfo, setLocationInfo] = useState(null); // Holds location and state info
   const [messageColor, setMessageColor] = useState("text-gray-500"); // Default color
 
   const handlePincodeSubmit = async (e) => {
@@ -20,7 +21,9 @@ const PincodeCheck = () => {
       if (data.available) {
         setMessage("Yay! We can deliver to this pincode.");
         setMessageColor("text-green-500");
-        toast.success("Yes We can deliver to this pincode", {
+        setLocationInfo({ location: data.location, state: data.state }); // Set location info
+
+        toast.success("Yes, we can deliver to this pincode", {
           position: "bottom-center",
           autoClose: 1000,
           hideProgressBar: false,
@@ -29,11 +32,13 @@ const PincodeCheck = () => {
           draggable: true,
           progress: undefined,
           theme: "light",
-        }); // Green color for success
+        });
       } else {
         setMessage("Sorry, we cannot deliver to this pincode.");
-        setMessageColor("text-red-500"); // Red color for error
-        toast.error("Cannot Deliver to this pincode!", {
+        setMessageColor("text-red-500");
+        setLocationInfo(null); // Clear location info on failure
+
+        toast.error("Cannot deliver to this pincode!", {
           position: "bottom-center",
           autoClose: 1000,
           hideProgressBar: false,
@@ -46,7 +51,8 @@ const PincodeCheck = () => {
       }
     } catch (error) {
       setMessage("An error occurred while checking the pincode.");
-      setMessageColor("text-red-500"); // Red color for error
+      setMessageColor("text-red-500");
+      setLocationInfo(null); // Clear location info on error
     }
   };
 
